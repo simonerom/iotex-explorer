@@ -65,7 +65,7 @@ class AddCustomTokensFormModal extends React.PureComponent<
           >
             <div style={{ width: 180, marginRight: 20 }}>
               <img
-                src={`/image/token/${item.logo}`}
+                src={`https://iotexscan.io/image/token/${item.logo}`}
                 alt="ico"
                 style={{ width: "13px", height: "13px" }}
               />
