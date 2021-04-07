@@ -15,7 +15,7 @@ import { Query, QueryResult } from "react-apollo";
 import Helmet from "react-helmet";
 import { RouteComponentProps } from "react-router";
 import { Link } from "react-router-dom";
-import { Token } from "../../erc20/token";
+import { Token, ITokenInfo } from "../../erc20/token";
 import { AddressName } from "../common/address-name";
 import { analyticsClient } from "../common/apollo-client";
 import { GetTokenMetadataMap } from "../common/common-metadata";
@@ -148,18 +148,18 @@ const getXrc20ActionListColumns = ({
   ];
 };
 
-const getXrc20HoldersListColumns = (): Array<ColumnProps<IXRC20HolderInfo>> => [
+const getXrc20HoldersListColumns = (): Array<ColumnProps<ITokenInfo>> => [
   {
     title: t("render.key.address"),
     dataIndex: "address",
     width: "50vw",
-    render: (text: string): JSX.Element | string => {
+    render: (_: string, item: ITokenInfo): JSX.Element | string => {
       return (
         <span
           className="ellipsis-text"
           style={{ maxWidth: "50vw", minWidth: 250 }}
         >
-          <AddressName address={text} />
+          <AddressName address={item.tokenAddress} />
         </span>
       );
     }
@@ -168,16 +168,17 @@ const getXrc20HoldersListColumns = (): Array<ColumnProps<IXRC20HolderInfo>> => [
     title: t("render.key.balance"),
     dataIndex: "contract",
     width: "50vw",
-    render: (text: string, item: IXRC20HolderInfo): JSX.Element | string => {
+    render: (text: string, item: ITokenInfo): JSX.Element | string => {
       return (
         <span
           className="ellipsis-text"
           style={{ maxWidth: "50vw", minWidth: 250 }}
         >
           <XRC20TokenBalance
-            key={`balance-${text}-${item.address}`}
+            key={`balance-${text}-${item.tokenAddress}`}
             contract={text}
-            address={item.address}
+            address={item.tokenAddress}
+            balanceString={item.balanceString}
           />
         </span>
       );
@@ -312,7 +313,7 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
       ssr={false}
       client={analyticsClient}
     >
-      {({ data, loading, error }: QueryResult) => {
+      {async ({ data, loading, error }: QueryResult) => {
         if (error) {
           notification.error({
             message: `failed to query analytics xrc20 in XRC20HoldersTable: ${error}`
@@ -325,10 +326,11 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
           ) || [];
         const numHolders =
           get<number>(data || {}, "xrc20.tokenHolderAddresses.count") || 0;
-        const holdersPage = holders.map(addr => ({
-          address: addr,
-          contract: address
-        }));
+        
+        const tokenInfos = await Promise.all(
+          holders.map(addr => Token.getToken(address).getInfo(addr))
+        );
+        let holdersPage = tokenInfos.sort((a, b) => Number(a.balance) - Number(b.balance))
         return (
           <Table
             loading={{
