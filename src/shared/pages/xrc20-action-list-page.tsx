@@ -179,6 +179,7 @@ const getXrc20HoldersListColumns = (): Array<ColumnProps<ITokenInfo>> => [
             contract={text}
             address={item.tokenAddress}
             balanceString={item.balanceString}
+            symbol={item.symbol}
           />
         </span>
       );
@@ -324,13 +325,18 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
             data || {},
             "xrc20.tokenHolderAddresses.addresses"
           ) || [];
+        
+        const onOffset = (offset: number) => {
+          setOffset(offset)
+        }
         const numHolders =
           get<number>(data || {}, "xrc20.tokenHolderAddresses.count") || 0;
-          return <XRC20HoldersTableItems 
-                    numHolders={numHolders} 
+          return <XRC20HoldersTableItems
+                    numHolders={numHolders}
                     loading={loading}
                     address={address}
-                    addresses={holders}/> 
+                    addresses={holders}
+                    onOffsetChange={onOffset}/>
       }}
     </Query>
   );
@@ -338,35 +344,41 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
 
 export interface IXRC20ActionTableItems {
   address: string;
-  addresses: string[];
+  addresses: Array<string>;
   loading: boolean;
   numHolders: number;
+  onOffsetChange: (offset: number) => void
 }
 
 export const XRC20HoldersTableItems: React.FC<
   IXRC20ActionTableItems
-> = ({ address , addresses, loading , numHolders}) => {
-        const tokens: ITokenInfo[] = []
-        const [holdersPage, setHolderPage] = useState(tokens)
+> = ({ address , addresses , loading , numHolders, onOffsetChange}) => {
+        const [holdersPage, setHolderPage] = useState<Array<ITokenInfo>>([]);
+        const [tableLoading, setTableLoading] = useState(true)
         useEffect(() => {
+          sortByToken()
+        }, [addresses]);
+        
+        const sortByToken = () => {
+          setTableLoading(true)
           Promise.all(
             addresses.map(addr => Token.getToken(address).getInfo(addr))
           ).then(response => {
+            setTableLoading(false)
             const holderPages = response.sort((a, b) => Number(b.balance) - Number(a.balance))
-            console.warn(holderPages);
             setHolderPage(holderPages)
           }).catch(error => {
+            setTableLoading(false)
             notification.error({
               message: `failed to query analytics xrc20 in XRC20HoldersTable: ${error}`
             });
-          }).finally(() => {
-            console.warn('finally');
-          });
-        }, [holdersPage])
+          })
+        };
+
         return (
           <Table
             loading={{
-              spinning: loading,
+              spinning: tableLoading,
               indicator: <Icon type="loading" />
             }}
             rowKey="hash"
@@ -380,9 +392,10 @@ export const XRC20HoldersTableItems: React.FC<
               showQuickJumper: true
             }}
             size="middle"
-            // onChange={pagination => {
-              // setOffset(((pagination.current || 1) - 1) * PAGE_SIZE);
-            // }}
+            onChange={pagination => {
+              const offset = ((pagination.current || 1) - 1) * PAGE_SIZE
+              onOffsetChange?.(offset)
+            }}
           />
         );
 }
