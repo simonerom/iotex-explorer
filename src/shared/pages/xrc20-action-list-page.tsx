@@ -10,7 +10,7 @@ import BigNumber from "bignumber.js";
 import { get } from "dottie";
 import { t } from "onefx/lib/iso-i18n";
 import { styled } from "onefx/lib/styletron-react";
-import React, { Ref, useImperativeHandle, useRef, useState} from "react";
+import React, { Ref, useEffect, useImperativeHandle, useRef, useState} from "react";
 import { Query, QueryResult } from "react-apollo";
 import Helmet from "react-helmet";
 import { RouteComponentProps } from "react-router";
@@ -313,7 +313,7 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
       ssr={false}
       client={analyticsClient}
     >
-      {async ({ data, loading, error }: QueryResult) => {
+      {({ data, loading, error }: QueryResult) => {
         if (error) {
           notification.error({
             message: `failed to query analytics xrc20 in XRC20HoldersTable: ${error}`
@@ -326,11 +326,43 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
           ) || [];
         const numHolders =
           get<number>(data || {}, "xrc20.tokenHolderAddresses.count") || 0;
-        
-        const tokenInfos = await Promise.all(
-          holders.map(addr => Token.getToken(address).getInfo(addr))
-        );
-        let holdersPage = tokenInfos.sort((a, b) => Number(a.balance) - Number(b.balance))
+          return <XRC20HoldersTableItems 
+                    numHolders={numHolders} 
+                    loading={loading}
+                    address={address}
+                    addresses={holders}/> 
+      }}
+    </Query>
+  );
+};
+
+export interface IXRC20ActionTableItems {
+  address: string;
+  addresses: string[];
+  loading: boolean;
+  numHolders: number;
+}
+
+export const XRC20HoldersTableItems: React.FC<
+  IXRC20ActionTableItems
+> = ({ address , addresses, loading , numHolders}) => {
+        const tokens: ITokenInfo[] = []
+        const [holdersPage, setHolderPage] = useState(tokens)
+        useEffect(() => {
+          Promise.all(
+            addresses.map(addr => Token.getToken(address).getInfo(addr))
+          ).then(response => {
+            const holderPages = response.sort((a, b) => Number(b.balance) - Number(a.balance))
+            console.warn(holderPages);
+            setHolderPage(holderPages)
+          }).catch(error => {
+            notification.error({
+              message: `failed to query analytics xrc20 in XRC20HoldersTable: ${error}`
+            });
+          }).finally(() => {
+            console.warn('finally');
+          });
+        }, [holdersPage])
         return (
           <Table
             loading={{
@@ -348,15 +380,12 @@ export const XRC20HoldersTable: React.FC<IXRC20ActionTable> = ({
               showQuickJumper: true
             }}
             size="middle"
-            onChange={pagination => {
-              setOffset(((pagination.current || 1) - 1) * PAGE_SIZE);
-            }}
+            // onChange={pagination => {
+              // setOffset(((pagination.current || 1) - 1) * PAGE_SIZE);
+            // }}
           />
         );
-      }}
-    </Query>
-  );
-};
+}
 
 const BasicInfoCard: React.FC<{
   tokenAddress: string;
